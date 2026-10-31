@@ -11,7 +11,6 @@
     <AssemblyName>HupAddonManager</AssemblyName>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>1.0.1</Version>
     <Product>hup's AddOn Manager</Product>
     <Company>hup</Company>
     <Description>Addon manager and auto-updater for World of Warcraft: Forever</Description>

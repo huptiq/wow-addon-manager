@@ -14,7 +14,9 @@ public static class AppInfo
     public const string RepoUrl = "https://github.com/" + Repo;
 
     public static Version Version =>
-        typeof(AppInfo).Assembly.GetName().Version ?? new Version(1, 0, 0);
+        System.Reflection.Assembly.GetEntryAssembly()?.GetName().Version
+        ?? typeof(AppInfo).Assembly.GetName().Version
+        ?? new Version(1, 0, 0);
 
     public static string VersionText => $"{Version.Major}.{Version.Minor}.{Version.Build}";
 }
