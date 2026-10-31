@@ -323,7 +323,6 @@
                                     <TextBlock Text="Check for updates while running:" VerticalAlignment="Center" Margin="0,0,10,0" />
                                     <ComboBox Width="190" ItemsSource="{Binding Intervals}" SelectedItem="{Binding SelectedInterval}" />
                                 </StackPanel>
-                                <CheckBox IsChecked="{Binding WaitForWow}" Content="Don't install while WoW is running - wait until the game is closed" />
                                 <CheckBox IsChecked="{Binding BackupWtf}" Content="Back up addon settings (WTF folder) before installing updates" />
                                 <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                     <TextBlock Text="Keep" VerticalAlignment="Center" />

@@ -173,21 +173,20 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task UpdateAllAsync()
     {
         if (!HasWow || !EnsureNotBusy()) return;
-        if (WowProcess.IsRunning(Manager.Flavor!.Path) &&
-            !Dialogs.Confirm("WoW is running", $"{Manager.Flavor.DisplayName} is running. Updated addons are used after you reload the UI (/reload) or restart the game.\n\nUpdate now anyway?", "Update now"))
-            return;
-
         await RunAsync("Update", async () =>
         {
             var s = await Manager.UpdateAllAsync(install: true);
             if (s.Failed.Count > 0)
                 Dialogs.Error("Some updates failed", string.Join("\n", s.Failed.Select(f => $"• {f.Name}: {f.Error}")));
             else if (s.Updated.Count > 0)
-                StatusText = $"Updated {s.Updated.Count} addon{(s.Updated.Count == 1 ? "" : "s")}";
+                StatusText = $"Updated {s.Updated.Count} addon{(s.Updated.Count == 1 ? "" : "s")}" + ReloadHint();
             else
                 StatusText = "Everything is up to date";
         });
     }
+
+    private string ReloadHint() =>
+        Manager.Flavor != null && WowProcess.IsRunning(Manager.Flavor.Path) ? " - type /reload in game to load the changes" : "";
 
     [RelayCommand]
     private void ExportList()
@@ -298,7 +297,11 @@ public sealed partial class MainViewModel : ObservableObject
     private async Task UpdateRowAsync(AddonRowViewModel? row)
     {
         if (row?.Tracked == null || !EnsureNotBusy()) return;
-        await RunAsync($"Update of {row.Name}", () => Manager.UpdateAsync(row.Tracked));
+        await RunAsync($"Update of {row.Name}", async () =>
+        {
+            await Manager.UpdateAsync(row.Tracked);
+            StatusText = $"{row.Name} updated" + ReloadHint();
+        });
     }
 
     [RelayCommand]

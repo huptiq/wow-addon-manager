@@ -55,7 +55,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool BackupWtf { get => S.BackupWtfBeforeUpdate; set { S.BackupWtfBeforeUpdate = value; Save(); } }
     public bool CloseToTray { get => S.CloseToTray; set { S.CloseToTray = value; Save(); } }
     public bool ExitAfterBootUpdate { get => S.ExitAfterBootUpdate; set { S.ExitAfterBootUpdate = value; Save(); } }
-    public bool WaitForWow { get => S.WaitForWowToClose; set { S.WaitForWowToClose = value; Save(); } }
     public bool ShowNotifications { get => S.ShowNotifications; set { S.ShowNotifications = value; Save(); } }
     public bool CheckForAppUpdates { get => S.CheckForAppUpdates; set { S.CheckForAppUpdates = value; Save(); } }
     public int AddonBackupsToKeep { get => S.AddonBackupsToKeep; set { S.AddonBackupsToKeep = Math.Clamp(value, 1, 50); Save(); } }

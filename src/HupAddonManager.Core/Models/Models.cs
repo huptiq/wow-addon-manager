@@ -91,7 +91,6 @@ public sealed class AppSettings
     public bool StartWithWindows { get; set; }
     public bool ExitAfterBootUpdate { get; set; }
     public bool CloseToTray { get; set; } = true;
-    public bool WaitForWowToClose { get; set; } = true;
     public bool BackupWtfBeforeUpdate { get; set; } = true;
     public int WtfBackupsToKeep { get; set; } = 5;
     public int AddonBackupsToKeep { get; set; } = 3;

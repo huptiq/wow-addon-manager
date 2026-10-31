@@ -13,22 +13,12 @@ public sealed class AutoUpdater
     private readonly AddonManager _manager;
     private readonly TrayService _tray;
     private readonly DispatcherTimer _timer = new();
-    private readonly DispatcherTimer _wowWatch = new() { Interval = TimeSpan.FromSeconds(20) };
-    private bool _installWhenWowCloses;
 
     public AutoUpdater(AddonManager manager, TrayService tray)
     {
         _manager = manager;
         _tray = tray;
         _timer.Tick += async (_, _) => await RunAsync("scheduled check");
-        _wowWatch.Tick += async (_, _) =>
-        {
-            if (!_installWhenWowCloses || _manager.Flavor == null || WowProcess.IsRunning(_manager.Flavor.Path)) return;
-            _wowWatch.Stop();
-            _installWhenWowCloses = false;
-            Log.Info("WoW closed - installing queued updates");
-            await RunAsync("WoW closed");
-        };
         Reschedule();
     }
 
@@ -73,14 +63,6 @@ public sealed class AutoUpdater
         }
 
         var install = _manager.Settings.AutoUpdate;
-        var wowRunning = WowProcess.IsRunning(flavor.Path);
-        if (install && wowRunning && _manager.Settings.WaitForWowToClose)
-        {
-            install = false;
-            _installWhenWowCloses = true;
-            _wowWatch.Start();
-        }
-
         Log.Info($"Auto-update run ({reason}); install={install}");
         UpdateSummary summary;
         try { summary = await _manager.UpdateAllAsync(install); }
@@ -93,14 +75,14 @@ public sealed class AutoUpdater
         if (!_manager.Settings.ShowNotifications) return summary;
         if (summary.Updated.Count > 0)
         {
+            var wowRunning = WowProcess.IsRunning(flavor.Path);
             _tray.Notify($"Updated {summary.Updated.Count} addon{(summary.Updated.Count == 1 ? "" : "s")}",
                 string.Join(", ", summary.Updated) + (wowRunning ? "\nType /reload in game to load them." : ""));
         }
         else if (summary.Available.Count > 0 && !install)
         {
-            var when = _installWhenWowCloses ? " They'll be installed when you close WoW." : " Open the manager to install them.";
             _tray.Notify($"{summary.Available.Count} addon update{(summary.Available.Count == 1 ? "" : "s")} available",
-                string.Join(", ", summary.Available) + "." + when);
+                string.Join(", ", summary.Available) + ". Open the manager to install them.");
         }
         if (summary.Failed.Count > 0)
         {
