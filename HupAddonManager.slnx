@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HupAddonManager.App/HupAddonManager.App.csproj" />
+    <Project Path="src/HupAddonManager.Core/HupAddonManager.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HupAddonManager.Tests/HupAddonManager.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,23 @@
+<Window x:Class="HupAddonManager.App.Views.TextWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Style="{StaticResource DarkWindow}"
+        Width="640" Height="520" MinWidth="420" MinHeight="300"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Icon="/Assets/app.ico">
+    <Grid Margin="20,18,20,16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="HeaderText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBlock x:Name="HintText" Grid.Row="1" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+        <TextBox x:Name="Body" Grid.Row="2" Margin="0,12,0,0" TextWrapping="Wrap" AcceptsReturn="True"
+                 VerticalScrollBarVisibility="Auto" FontFamily="Cascadia Mono, Consolas" FontSize="12.5" VerticalContentAlignment="Top" />
+        <DockPanel Grid.Row="3" Margin="0,14,0,0" LastChildFill="False">
+            <StackPanel x:Name="LeftButtons" DockPanel.Dock="Left" Orientation="Horizontal" />
+            <StackPanel x:Name="RightButtons" DockPanel.Dock="Right" Orientation="Horizontal" />
+        </DockPanel>
+    </Grid>
+</Window>
