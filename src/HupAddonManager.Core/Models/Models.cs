@@ -34,6 +34,10 @@ public sealed class TrackedAddon
     public string Provider { get; set; } = "";
     public string ProjectId { get; set; } = "";
     public string SourceUrl { get; set; } = "";
+
+    [JsonIgnore]
+    public bool FoundOnWago => Provider != "wago" && Providers.WagoWeb.IsWagoLink(SourceUrl);
+
     public List<string> Folders { get; set; } = new();
     public string? InstalledVersion { get; set; }
     public string? InstalledReleaseId { get; set; }

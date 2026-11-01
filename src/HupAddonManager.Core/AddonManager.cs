@@ -40,6 +40,7 @@ public sealed class AddonManager
     public AppSettings Settings { get; private set; }
     public AddonDatabase Db { get; }
     public ProviderRegistry Providers { get; } = new();
+    public Search.AddonSearch Search { get; } = new();
     public WowFlavor? Flavor { get; private set; }
     public List<WowFlavor> Flavors { get; private set; } = new();
     public IReadOnlyList<AddonEntry> Entries { get; private set; } = Array.Empty<AddonEntry>();
@@ -370,8 +371,91 @@ public sealed class AddonManager
     public async Task<RemoteAddon> LookupAsync(string link, bool allowPrerelease, CancellationToken ct = default)
     {
         var (provider, id) = Providers.Parse(link);
+        if (provider is WagoProvider) return await LookupWagoAsync(provider, id, allowPrerelease, ct).ConfigureAwait(false);
         return await provider.GetLatestAsync(id, allowPrerelease, Ctx, ct).ConfigureAwait(false);
     }
+
+    private async Task<RemoteAddon> LookupWagoAsync(IAddonProvider wago, string slug, bool allowPrerelease, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(Settings.WagoApiKey))
+        {
+            try { return await wago.GetLatestAsync(slug, allowPrerelease, Ctx, ct).ConfigureAwait(false); }
+            catch (ProviderException ex) when (ex.IsAuthFailure)
+            {
+                Log.Info("Wago refused the API key - using the addon's own source instead.");
+            }
+        }
+
+        var flavor = Flavor ?? throw new ProviderException("Pick a game client first.");
+        var page = await WagoWeb.GetAddonPageAsync(slug, ct).ConfigureAwait(false);
+        var name = page.Name;
+        var wagoLabel = page.LabelFor(flavor.WagoGameVersion);
+        if (page.KnowsReleases && wagoLabel == null)
+            throw new ProviderException($"{name} has no version for {flavor.DisplayName} on Wago (it only lists: {string.Join(", ", page.ReleaseLabels.Keys)}).");
+
+        var candidates = new List<(IAddonProvider Source, RemoteAddon Remote)>();
+        string? lastError = null;
+        foreach (var link in page.Links)
+        {
+            IAddonProvider source;
+            string sourceId;
+            try { (source, sourceId) = Providers.Parse(link); }
+            catch (ProviderException) { continue; }
+            if (source is WagoProvider or DirectUrlProvider || candidates.Any(c => c.Source == source)) continue;
+            try
+            {
+                candidates.Add((source, await source.GetLatestAsync(sourceId, allowPrerelease, Ctx, ct).ConfigureAwait(false)));
+            }
+            catch (ProviderException ex)
+            {
+                lastError = ex.Message;
+                Log.Warn($"{name}: source {link} from Wago didn't work: {ex.Message}");
+            }
+        }
+
+        var pick = PickWagoCandidate(candidates.Select(c => c.Remote).ToList(), wagoLabel, flavor);
+        if (pick != null)
+        {
+            var source = candidates.First(c => c.Remote == pick).Source;
+            Log.Info($"{name}: installing {pick.Latest.Version} for {flavor.DisplayName} from {source.DisplayName} (linked on its Wago page).");
+            return pick;
+        }
+
+        if (candidates.Count > 0)
+        {
+            var offered = string.Join(", ", candidates.Select(c => $"{c.Source.DisplayName}: {c.Remote.Latest.FileName ?? c.Remote.Latest.Version}"));
+            throw new ProviderException(
+                $"Couldn't find the {flavor.DisplayName} version of {name}. The sources linked on its Wago page only offer other game versions ({offered}).\n\n" +
+                "Install it with the Wago App or from its Wago page, or add a Wago Patreon key in Settings -> API keys.");
+        }
+
+        throw new ProviderException(
+            $"{name} is only downloadable from Wago itself, and Wago doesn't let other apps download its files without a paid Patreon API key. " +
+            "Install it with the Wago App or from its Wago page, or add a Patreon key in Settings -> API keys." +
+            (lastError != null ? $"\n\n(The source linked on its Wago page failed: {lastError})" : ""));
+    }
+
+    internal static RemoteAddon? PickWagoCandidate(List<RemoteAddon> candidates, string? wagoLabel, WowFlavor flavor)
+    {
+        bool SameAsWago(RemoteAddon r) => wagoLabel != null &&
+            (r.Latest.Version.Contains(wagoLabel, StringComparison.OrdinalIgnoreCase)
+             || (r.Latest.FileName?.Contains(wagoLabel, StringComparison.OrdinalIgnoreCase) ?? false));
+
+        var forFlavor = candidates.Where(r => r.Latest.FlavorMatched)
+            .OrderByDescending(SameAsWago)
+            .ThenByDescending(r => r.Latest.Date ?? DateTimeOffset.MinValue)
+            .FirstOrDefault();
+        if (forFlavor != null) return forFlavor;
+
+        var neutralSameVersion = candidates.FirstOrDefault(r =>
+            SameAsWago(r) && AssetPicker.Score(r.Latest.FileName ?? r.Latest.Version, flavor, out _) >= 0);
+        if (neutralSameVersion != null) neutralSameVersion.Latest.FlavorMatched = true;
+        return neutralSameVersion;
+    }
+
+    public Task<Search.SearchOutcome> SearchAsync(Search.SearchQuery query, CancellationToken ct = default) =>
+        Search.SearchAsync(query, Ctx, ct);
+
 
     public TrackedAddon? FindTracked(string provider, string projectId) =>
         Data.Addons.FirstOrDefault(a => a.Provider == provider && a.ProjectId.Equals(projectId, StringComparison.OrdinalIgnoreCase));

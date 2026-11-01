@@ -21,8 +21,7 @@ public partial class MainWindow : Window
             var s = VM.Manager.Settings;
             CurseKeyBox.Password = s.CurseForgeApiKey ?? "";
             WagoKeyBox.Password = s.WagoApiKey ?? "";
-            GitHubKeyBox.Password = s.GitHubToken ?? "";
-            ((INotifyCollectionChanged)VM.LogLines).CollectionChanged += (_, _) =>
+            GitHubKeyBox.Password = s.GitHubToken ?? "";            ((INotifyCollectionChanged)VM.LogLines).CollectionChanged += (_, _) =>
             {
                 if (LogList.Items.Count > 0) LogList.ScrollIntoView(LogList.Items[^1]);
             };

@@ -8,7 +8,12 @@ using HupAddonManager.Core.Wow;
 
 namespace HupAddonManager.Core.Providers;
 
-public sealed class ProviderException(string message) : Exception(message);
+public sealed class ProviderException(string message, int? statusCode = null) : Exception(message)
+{
+    public int? StatusCode { get; } = statusCode;
+
+    public bool IsAuthFailure => StatusCode is 401 or 403;
+}
 
 public sealed class ProviderContext
 {
@@ -76,13 +81,13 @@ public static class Http
 
         throw resp.StatusCode switch
         {
-            HttpStatusCode.NotFound => new ProviderException($"Not found on {host} (404). Check the link."),
-            HttpStatusCode.Unauthorized => new ProviderException($"{host} rejected the request (401). Check the API key in Settings."),
+            HttpStatusCode.NotFound => new ProviderException($"Not found on {host} (404). Check the link.", code),
+            HttpStatusCode.Unauthorized => new ProviderException($"{host} rejected the request (401). Check the API key in Settings.", code),
             HttpStatusCode.Forbidden when host.Contains("github") && resp.Headers.TryGetValues("x-ratelimit-remaining", out var rl) && rl.FirstOrDefault() == "0"
-                => new ProviderException("GitHub rate limit reached (60 requests/hour without a token). Add a GitHub token in Settings or try again later."),
-            HttpStatusCode.Forbidden => new ProviderException($"{host} refused access (403). {detail}"),
-            HttpStatusCode.TooManyRequests => new ProviderException($"{host} is rate limiting us (429). Try again in a few minutes."),
-            _ => new ProviderException($"{host} returned HTTP {code}. {detail}"),
+                => new ProviderException("GitHub rate limit reached (60 requests/hour without a token). Add a GitHub token in Settings or try again later.", 429),
+            HttpStatusCode.Forbidden => new ProviderException($"{host} refused access (403). {detail}", code),
+            HttpStatusCode.TooManyRequests => new ProviderException($"{host} is rate limiting us (429). Try again in a few minutes.", code),
+            _ => new ProviderException($"{host} returned HTTP {code}. {detail}", code),
         };
     }
 

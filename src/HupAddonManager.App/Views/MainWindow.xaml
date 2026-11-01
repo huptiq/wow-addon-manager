@@ -194,6 +194,105 @@
                 </Grid>
             </TabItem>
 
+            <TabItem Header="Search">
+                <Grid DataContext="{Binding Search}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="16,14,16,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid>
+                            <TextBox x:Name="AddonSearchBox" Text="{Binding Query, UpdateSourceTrigger=PropertyChanged}" Padding="30,7,8,7">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Return" Command="{Binding SearchCommand}" />
+                                </TextBox.InputBindings>
+                            </TextBox>
+                            <TextBlock Text="⌕" Margin="11,0,0,1" VerticalAlignment="Center" Foreground="{StaticResource Muted}" IsHitTestVisible="False" FontSize="15" />
+                            <TextBlock Text="Search addons by name, author or description" Margin="31,0,0,0" VerticalAlignment="Center" Foreground="#6B7280" IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Text, ElementName=AddonSearchBox}" Value="">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <Button Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource PrimaryButton}" Command="{Binding SearchCommand}">
+                            <TextBlock Text="Search" Foreground="#1A1A1A" />
+                        </Button>
+                    </Grid>
+
+                    <DockPanel Grid.Row="1" Margin="16,2,16,8">
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Style="{StaticResource MutedText}" VerticalAlignment="Center" />
+                        <CheckBox IsChecked="{Binding OnlyForFlavor}" Content="{Binding OnlyForFlavorLabel}" />
+                    </DockPanel>
+
+                    <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0">
+                        <Grid>
+                            <ListBox ItemsSource="{Binding Results}" VirtualizingPanel.IsVirtualizing="True">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SearchRow}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="210" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Margin="0,0,14,0" VerticalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                                    <Border Style="{StaticResource Pill}" Margin="8,0,0,0" Background="#264CC38A" ToolTip="{Binding FlavorTip}"
+                                                            Visibility="{Binding IsForFlavor, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="{Binding FlavorBadge}" Foreground="{StaticResource Green}" FontSize="11" FontWeight="SemiBold" />
+                                                    </Border>
+                                                    <Border Style="{StaticResource Pill}" Margin="6,0,0,0" Background="#265AA9F7"
+                                                            Visibility="{Binding Installed, Converter={StaticResource BoolToVis}}">
+                                                        <TextBlock Text="Installed" Foreground="{StaticResource Blue}" FontSize="11" FontWeight="SemiBold" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <TextBlock Text="{Binding Byline}" Style="{StaticResource MutedText}" Margin="0,1,0,0" />
+                                                <TextBlock Text="{Binding Summary}" Foreground="{StaticResource Muted}" FontSize="12.5" TextWrapping="Wrap" MaxHeight="36"
+                                                           TextTrimming="CharacterEllipsis" Margin="0,3,0,0" ToolTip="{Binding Summary}"
+                                                           Visibility="{Binding HasSummary, Converter={StaticResource BoolToVis}}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <TextBlock Text="{Binding CategoryText}" Style="{StaticResource MutedText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding CategoryText}" />
+                                                <TextBlock Text="{Binding DownloadsText}" Style="{StaticResource MutedText}" />
+                                                <TextBlock Text="{Binding UpdatedText}" Style="{StaticResource MutedText}" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Button Content="Page" Style="{StaticResource SmallButton}" Margin="0,0,6,0" ToolTip="Open the addon's page in your browser"
+                                                        Command="{Binding DataContext.Search.OpenPageCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                <Button Content="{Binding InstallText}" Style="{StaticResource SmallPrimaryButton}" MinWidth="80"
+                                                        Command="{Binding DataContext.Search.InstallCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <ProgressBar VerticalAlignment="Top" Height="2" IsIndeterminate="True"
+                                         Visibility="{Binding IsSearching, Converter={StaticResource BoolToVis}}" />
+                            <TextBlock Text="{Binding StatusText}" Style="{StaticResource MutedText}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="3" Text="{Binding SourcesText}" Style="{StaticResource MutedText}" Margin="16,6,16,8" TextTrimming="CharacterEllipsis"
+                               ToolTip="Results per source. CurseForge search needs a free API key (Settings)." />
+                </Grid>
+            </TabItem>
+
             <TabItem Header="Backups">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="18,16,18,8" MaxWidth="980" HorizontalAlignment="Stretch">
@@ -299,7 +398,15 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Settings">
+            <TabItem>
+                <TabItem.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Settings" />
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource Red}" Margin="6,0,0,0" VerticalAlignment="Top"
+                                 ToolTip="Action needed: add a free CurseForge API key"
+                                 Visibility="{Binding Settings.NeedsCurseForgeKey, Converter={StaticResource BoolToVis}}" />
+                    </StackPanel>
+                </TabItem.Header>
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="18,16,18,8" MaxWidth="820" HorizontalAlignment="Left" DataContext="{Binding Settings}">
                         <Border Style="{StaticResource Card}">
@@ -349,9 +456,22 @@
 
                         <Border Style="{StaticResource Card}">
                             <StackPanel>
-                                <TextBlock Text="API keys (optional)" Style="{StaticResource SectionTitle}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="API keys" Style="{StaticResource SectionTitle}" />
+                                    <Ellipse Width="8" Height="8" Fill="{StaticResource Red}" Margin="6,0,0,0" VerticalAlignment="Top"
+                                             Visibility="{Binding NeedsCurseForgeKey, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
                                 <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0,0,0,12"
-                                           Text="Everything works without keys. CurseForge works through a free mirror, but an official key is more reliable. Wago Addons only works with a key. A GitHub token raises GitHub's limit of 60 checks per hour. Keys are stored encrypted for your Windows user only." />
+                                           Text="A free CurseForge API key is needed to search CurseForge, and makes CurseForge updates more reliable (without it a free mirror is used). The Wago key and GitHub token are optional: a GitHub token raises GitHub's limit of 60 checks per hour. Keys are stored encrypted for your Windows user only." />
+                                <Border Background="#26EF4444" CornerRadius="6" Padding="10,8" Margin="0,0,0,12"
+                                        Visibility="{Binding NeedsCurseForgeKey, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Text}"
+                                               Text="Action needed: add your CurseForge API key. Click 'Get a key', sign in, copy the key from 'API keys', paste it below and click 'Save keys'. It's free." />
+                                </Border>
+                                <Border Background="#26F59E0B" CornerRadius="6" Padding="10,8" Margin="0,0,0,12">
+                                    <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Text}"
+                                               Text="Wago Addons: searching works without a key (we read the public website). Addons found on Wago are installed and updated from the source their Wago page links to, like GitHub or CurseForge. Addons that are only on Wago need a paid Wago Patreon API key - normal (free) Wago keys are rejected with error 401." />
+                                </Border>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="150" />
@@ -363,15 +483,25 @@
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <TextBlock Text="CurseForge API key" VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="CurseForge API key" />
+                                        <Ellipse Width="7" Height="7" Fill="{StaticResource Red}" Margin="5,0,0,0" VerticalAlignment="Top"
+                                                 Visibility="{Binding NeedsCurseForgeKey, Converter={StaticResource BoolToVis}}" />
+                                    </StackPanel>
                                     <PasswordBox x:Name="CurseKeyBox" Grid.Column="1" Margin="0,4" />
                                     <Button Grid.Column="2" Content="Get a key" Style="{StaticResource GhostButton}" Foreground="{StaticResource Blue}" Margin="6,0,0,0"
                                             Command="{Binding OpenUrlCommand}" CommandParameter="https://console.curseforge.com/" />
-                                    <TextBlock Grid.Row="1" Text="Wago API key" VerticalAlignment="Center" />
-                                    <PasswordBox x:Name="WagoKeyBox" Grid.Row="1" Grid.Column="1" Margin="0,4" />
-                                    <Button Grid.Row="1" Grid.Column="2" Content="Get a key" Style="{StaticResource GhostButton}" Foreground="{StaticResource Blue}" Margin="6,0,0,0"
+                                    <StackPanel Grid.Row="1" VerticalAlignment="Center" ToolTip="Only paid Wago Patreon API keys work">
+                                        <TextBlock Text="Wago key (Patreon)" />
+                                        <TextBlock Text="optional" Style="{StaticResource MutedText}" FontSize="11" />
+                                    </StackPanel>
+                                    <PasswordBox x:Name="WagoKeyBox" Grid.Row="1" Grid.Column="1" Margin="0,4" ToolTip="Only paid Wago Patreon API keys work. Free keys are rejected (401)." />
+                                    <Button Grid.Row="1" Grid.Column="2" Content="Patreon key" Style="{StaticResource GhostButton}" Foreground="{StaticResource Blue}" Margin="6,0,0,0"
                                             Command="{Binding OpenUrlCommand}" CommandParameter="https://addons.wago.io/patreon" />
-                                    <TextBlock Grid.Row="2" Text="GitHub token" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Row="2" VerticalAlignment="Center">
+                                        <TextBlock Text="GitHub token" />
+                                        <TextBlock Text="optional" Style="{StaticResource MutedText}" FontSize="11" />
+                                    </StackPanel>
                                     <PasswordBox x:Name="GitHubKeyBox" Grid.Row="2" Grid.Column="1" Margin="0,4" />
                                     <Button Grid.Row="2" Grid.Column="2" Content="Create one" Style="{StaticResource GhostButton}" Foreground="{StaticResource Blue}" Margin="6,0,0,0"
                                             Command="{Binding OpenUrlCommand}" CommandParameter="https://github.com/settings/personal-access-tokens/new" />

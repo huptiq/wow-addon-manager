@@ -11,11 +11,22 @@ namespace HupAddonManager.App;
 
 public partial class App : Application
 {
-    private const string MutexName = @"Local\HupAddonManager.SingleInstance";
-    private const string ShowEventName = @"Local\HupAddonManager.Show";
+    private static readonly string InstanceKey = InstanceSuffix();
+    private static readonly string MutexName = @"Local\HupAddonManager.SingleInstance" + InstanceKey;
+    private static readonly string ShowEventName = @"Local\HupAddonManager.Show" + InstanceKey;
+    private static readonly string ExitEventName = @"Local\HupAddonManager.Exit" + InstanceKey;
+
+    private static string InstanceSuffix()
+    {
+        var data = Environment.GetEnvironmentVariable("HUPADDON_DATA");
+        if (string.IsNullOrWhiteSpace(data)) return "";
+        var hash = System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(data.Trim().ToLowerInvariant()));
+        return "." + Convert.ToHexString(hash)[..8];
+    }
 
     private Mutex? _mutex;
     private EventWaitHandle? _showEvent;
+    private EventWaitHandle? _exitEvent;
     private bool _exiting;
     private bool _trayHintShown;
 
@@ -31,6 +42,7 @@ public partial class App : Application
         var background = e.Args.Any(a => a.Equals(Autostart.BackgroundArg, StringComparison.OrdinalIgnoreCase));
 
         _mutex = new Mutex(true, MutexName, out var isFirst);
+        if (!isFirst && !background) isFirst = TryReplaceOtherCopy();
         if (!isFirst)
         {
             if (!background && EventWaitHandle.TryOpenExisting(ShowEventName, out var ev)) { ev.Set(); ev.Dispose(); }
@@ -38,14 +50,18 @@ public partial class App : Application
             return;
         }
         _showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowEventName);
+        _exitEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ExitEventName);
         new Thread(() =>
         {
-            while (_showEvent.WaitOne())
+            var handles = new WaitHandle[] { _showEvent, _exitEvent };
+            while (true)
             {
+                var which = WaitHandle.WaitAny(handles);
                 if (_exiting) return;
-                Dispatcher.BeginInvoke(ShowMainWindow);
+                if (which == 0) Dispatcher.BeginInvoke(ShowMainWindow);
+                else { Dispatcher.BeginInvoke(ExitApp); return; }
             }
-        }) { IsBackground = true, Name = "show-signal" }.Start();
+        }) { IsBackground = true, Name = "instance-signal" }.Start();
 
         DispatcherUnhandledException += OnUnhandled;
         Log.Prune();
@@ -53,7 +69,7 @@ public partial class App : Application
         Log.Info($"{AppInfo.Name} {AppInfo.VersionText} starting{(background ? " in background mode" : "")}");
 
         Manager = new AddonManager();
-        Autostart.Sync(Manager.Settings.StartWithWindows);
+        if (!AppPaths.IsTestInstance) Autostart.Sync(Manager.Settings.StartWithWindows);
         var hasWow = false;
         try { hasWow = Manager.InitializeWow(); }
         catch (Exception ex) { Log.Error("Finding the WoW folder failed", ex); }
@@ -88,7 +104,7 @@ public partial class App : Application
         }
         else
         {
-            ViewModel.SelectedTab = 2;
+            ViewModel.SelectedTab = 3;
             Log.Warn("No WoW folder found");
         }
 
@@ -127,6 +143,39 @@ public partial class App : Application
         catch (Exception ex) { Log.Warn("App update check failed: " + ex.Message); }
     }
 
+    private bool TryReplaceOtherCopy()
+    {
+        var self = Environment.ProcessPath;
+        var current = System.Diagnostics.Process.GetCurrentProcess();
+        System.Diagnostics.Process? other = null;
+        string? otherPath = null;
+        foreach (var p in System.Diagnostics.Process.GetProcessesByName(current.ProcessName))
+        {
+            if (p.Id == current.Id) continue;
+            try { otherPath = p.MainModule?.FileName; other = p; break; } catch { }
+        }
+        if (other == null || otherPath == null || self == null || otherPath.Equals(self, StringComparison.OrdinalIgnoreCase)) return false;
+
+        var otherVersion = other.MainModule?.FileVersionInfo.ProductVersion?.Split('+')[0] ?? "?";
+        var choice = Dialogs.Show("Already running",
+            $"Another copy of {AppInfo.Name} is already running:\n{otherPath} (v{otherVersion})\n\n" +
+            $"Close it and start this copy instead?\n{self} (v{AppInfo.VersionText})",
+            new[] { "Start this copy", "Keep the running one" }, "Start this copy");
+        if (choice != "Start this copy") return false;
+
+        if (EventWaitHandle.TryOpenExisting(ExitEventName, out var exitEvent))
+        {
+            exitEvent.Set();
+            exitEvent.Dispose();
+        }
+        else
+        {
+            try { other.Kill(); } catch { }
+        }
+        try { return _mutex!.WaitOne(TimeSpan.FromSeconds(15)); }
+        catch (AbandonedMutexException) { return true; }
+    }
+
     public void ShowMainWindow()
     {
         var w = MainWindow;
@@ -145,7 +194,6 @@ public partial class App : Application
         _exiting = true;
         Log.Info("Exiting");
         Tray?.Dispose();
-        _showEvent?.Set();
         Shutdown();
     }
 

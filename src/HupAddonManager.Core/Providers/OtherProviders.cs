@@ -77,15 +77,31 @@ public sealed class WagoProvider : IAddonProvider
 
     public string WebsiteFor(string projectId) => $"https://addons.wago.io/addons/{projectId}";
 
+    public const string PatreonUrl = "https://addons.wago.io/patreon";
+
+    public const string KeyRejectedMessage =
+        "Wago rejected the API key (401). Wago only accepts paid Patreon API keys - normal Wago keys don't work.";
+
+    internal static async Task<JsonDocument> GetJsonAsync(string url, string apiKey, CancellationToken ct)
+    {
+        try
+        {
+            return await Http.GetJsonAsync(url, ct, r => r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey)).ConfigureAwait(false);
+        }
+        catch (ProviderException ex) when (ex.IsAuthFailure)
+        {
+            throw new ProviderException(KeyRejectedMessage, ex.StatusCode);
+        }
+    }
+
     public async Task<RemoteAddon> GetLatestAsync(string projectId, bool allowPrerelease, ProviderContext ctx, CancellationToken ct)
     {
         var key = ctx.Settings.WagoApiKey;
         if (string.IsNullOrWhiteSpace(key))
-            throw new ProviderException("Wago Addons needs an API key (Settings -> API keys). Tip: most Wago addons are also on CurseForge, GitHub or WoWInterface - use one of those links instead.");
+            throw new ProviderException("Wago Addons needs a paid Patreon API key (Settings -> API keys). Tip: most Wago addons are also on CurseForge, GitHub or WoWInterface - use one of those links instead.");
 
-        void Auth(HttpRequestMessage r) => r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         var url = $"https://addons.wago.io/api/external/addons/{Uri.EscapeDataString(projectId)}?game_version={ctx.Flavor.WagoGameVersion}";
-        using var doc = await Http.GetJsonAsync(url, ct, Auth).ConfigureAwait(false);
+        using var doc = await GetJsonAsync(url, key!, ct).ConfigureAwait(false);
         var root = doc.RootElement;
 
         var recent = root.Prop("recent_release");

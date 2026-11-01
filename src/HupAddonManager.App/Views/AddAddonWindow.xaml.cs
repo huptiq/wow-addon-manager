@@ -16,7 +16,7 @@ public partial class AddAddonWindow : Window
 
     public TrackedAddon? Result { get; private set; }
 
-    public AddAddonWindow(AddonManager manager, AddonEntry? linkTarget = null, string? initialLink = null)
+    public AddAddonWindow(AddonManager manager, AddonEntry? linkTarget = null, string? initialLink = null, bool autoLookup = false)
     {
         InitializeComponent();
         Services.DarkTitleBar.Attach(this);
@@ -33,7 +33,12 @@ public partial class AddAddonWindow : Window
         }
         if (!string.IsNullOrWhiteSpace(initialLink)) LinkBox.Text = initialLink;
         else if (Clipboard.ContainsText() && LooksLikeLink(Clipboard.GetText())) LinkBox.Text = Clipboard.GetText().Trim();
-        Loaded += (_, _) => { LinkBox.Focus(); LinkBox.SelectAll(); };
+        Loaded += async (_, _) =>
+        {
+            LinkBox.Focus();
+            LinkBox.SelectAll();
+            if (autoLookup && LinkBox.Text.Length > 0) await LookupAsync();
+        };
         Closed += (_, _) => _cts?.Cancel();
     }
 
@@ -86,6 +91,13 @@ public partial class AddAddonWindow : Window
             ShowResult(remote);
             var existing = _manager.FindTracked(remote.Provider, remote.ProjectId);
             var note = existing != null && _linkTarget == null ? "Already installed - installing again will reinstall the latest version." : null;
+            if (remote.Provider != "wago" && WagoWeb.IsWagoLink(link))
+            {
+                var source = _manager.Providers.Get(remote.Provider)?.DisplayName ?? remote.Provider;
+                var wagoNote = $"Found on Wago Addons. Wago only lets apps download its files with a paid Patreon key, " +
+                               $"so this installs the same addon from {source} (linked on its Wago page). Updates will also come from {source}.";
+                note = note == null ? wagoNote : wagoNote + "\n\n" + note;
+            }
             SetBusy(false, note);
             InstallButton.Focus();
         }
@@ -101,6 +113,7 @@ public partial class AddAddonWindow : Window
         var flavor = _manager.Flavor!;
         var provider = _manager.Providers.Get(r.Provider)?.DisplayName ?? r.Provider;
         NameText.Text = r.Name;
+        if (r.Provider != "wago" && WagoWeb.IsWagoLink(LinkBox.Text)) provider += " (found on Wago Addons)";
         ByText.Text = string.IsNullOrWhiteSpace(r.Author) ? $"from {provider}" : $"by {r.Author} · from {provider}";
         SummaryText.Text = r.Summary ?? "";
         SummaryText.Visibility = string.IsNullOrWhiteSpace(r.Summary) ? Visibility.Collapsed : Visibility.Visible;

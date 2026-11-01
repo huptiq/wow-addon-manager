@@ -69,7 +69,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             try
             {
-                Autostart.Set(value);
+                if (!AppPaths.IsTestInstance) Autostart.Set(value);
                 S.StartWithWindows = value;
                 Save();
                 Log.Info(value ? "Start with Windows enabled" : "Start with Windows disabled");
@@ -83,6 +83,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     public bool HasCurseForgeKey => !string.IsNullOrEmpty(S.CurseForgeApiKeyProtected);
+    public bool NeedsCurseForgeKey => !HasCurseForgeKey;
     public bool HasWagoKey => !string.IsNullOrEmpty(S.WagoApiKeyProtected);
     public bool HasGitHubToken => !string.IsNullOrEmpty(S.GitHubTokenProtected);
 
@@ -93,6 +94,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         if (github != null) S.GitHubToken = github;
         _main.Manager.SaveSettings();
         OnPropertyChanged(nameof(HasCurseForgeKey));
+        OnPropertyChanged(nameof(NeedsCurseForgeKey));
         OnPropertyChanged(nameof(HasWagoKey));
         OnPropertyChanged(nameof(HasGitHubToken));
         SavedNote = "API keys saved ✓";
@@ -138,6 +140,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _main.RefreshWow();
         _main.Manager.Scan();
         _main.Backups.Reload();
+        _main.Search.FlavorChanged();
         _ = _main.CheckAllAsync();
     }
 

@@ -25,6 +25,8 @@ public static class AppPaths
 {
     private static string? _dataDir;
 
+    public static bool IsTestInstance => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("HUPADDON_DATA"));
+
     public static string DataDir
     {
         get

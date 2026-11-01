@@ -23,6 +23,7 @@ public sealed partial class MainViewModel : ObservableObject
     public AddonManager Manager { get; }
     public SettingsViewModel Settings { get; }
     public BackupsViewModel Backups { get; }
+    public SearchViewModel Search { get; }
 
     public ObservableCollection<AddonRowViewModel> Rows { get; } = new();
     public ICollectionView RowsView { get; }
@@ -44,7 +45,7 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private AddonRowViewModel? _selectedRow;
     [ObservableProperty] private int _selectedTab;
 
-    public string AppTitle => AppInfo.Name;
+    public string AppTitle => AppPaths.IsTestInstance ? AppInfo.Name + " (test copy)" : AppInfo.Name;
     public string AppVersion => "v" + AppInfo.VersionText;
     public bool HasAppUpdate => AppUpdate != null;
     public string AppUpdateText => AppUpdate == null ? "" : $"Version {AppUpdate.Tag} of {AppInfo.Name} is available.";
@@ -55,6 +56,7 @@ public sealed partial class MainViewModel : ObservableObject
         Manager = manager;
         Settings = new SettingsViewModel(this);
         Backups = new BackupsViewModel(this);
+        Search = new SearchViewModel(this);
         RowsView = CollectionViewSource.GetDefaultView(Rows);
         RowsView.Filter = o => o is AddonRowViewModel r && r.Matches(SearchText);
 
@@ -76,7 +78,11 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     partial void OnSearchTextChanged(string value) => RowsView.Refresh();
-    partial void OnSelectedTabChanged(int value) { if (value == 1) Backups.Reload(); }
+    partial void OnSelectedTabChanged(int value)
+    {
+        if (value == 1) _ = Search.EnsureLoadedAsync();
+        if (value == 2) Backups.Reload();
+    }
     partial void OnAppUpdateChanged(AppUpdateInfo? value) { OnPropertyChanged(nameof(HasAppUpdate)); OnPropertyChanged(nameof(AppUpdateText)); }
 
     partial void OnSelectedFlavorChanged(WowFlavor? value)
@@ -86,6 +92,7 @@ public sealed partial class MainViewModel : ObservableObject
         WowPathText = value.AddOnsPath;
         Manager.Scan();
         Backups.Reload();
+        Search.FlavorChanged();
         _ = CheckAllAsync();
     }
 
@@ -123,6 +130,7 @@ public sealed partial class MainViewModel : ObservableObject
         foreach (var e in Manager.Entries)
         {
             var source = e.Tracked == null ? "-" : Manager.Providers.Get(e.Tracked.Provider)?.DisplayName ?? e.Tracked.Provider;
+            if (e.Tracked?.FoundOnWago == true) source += " (via Wago)";
             Rows.Add(new AddonRowViewModel(e, source, flavor?.DisplayName ?? "this client", flavor?.InterfaceVersion));
         }
         UpdateCount = Rows.Count(r => r.Action == RowAction.Update);
@@ -157,7 +165,7 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void AddAddon()
     {
-        if (!HasWow) { SelectedTab = 2; return; }
+        if (!HasWow) { SelectedTab = 3; return; }
         var w = Dialogs.ShowDialog(new AddAddonWindow(Manager));
         if (w.Result != null) Log.Info($"Added {w.Result.Name}");
     }
