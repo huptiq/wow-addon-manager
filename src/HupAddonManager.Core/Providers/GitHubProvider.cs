@@ -24,15 +24,40 @@ public static class AssetPicker
     private static IEnumerable<string> Tokens(string name) =>
         name.ToLowerInvariant().Split(new[] { '-', '_', '.', ' ', '+' }, StringSplitOptions.RemoveEmptyEntries);
 
-    public static int Score(string fileName, WowFlavor flavor, out bool flavorMatched)
+    private static bool IsVersionToken(string t) =>
+        t.Length > 0 && (t.All(char.IsDigit) || (t.Length > 1 && (t[0] == 'v' || t[0] == 'r') && t[1..].All(char.IsDigit)));
+
+    public static int Score(string fileName, WowFlavor flavor, out bool flavorMatched) =>
+        Score(fileName, flavor, null, out flavorMatched, out _);
+
+    /// <summary>
+    /// Scores a release asset for the chosen flavor. When <paramref name="repoName"/> is given,
+    /// an asset whose name (minus version/flavor words) is exactly the repo name is the main addon
+    /// and scores highest; one that is the repo name plus an extra word (e.g. "Polestar_Recorder")
+    /// is a companion artifact and is marked via <paramref name="looksCompanion"/>.
+    /// </summary>
+    public static int Score(string fileName, WowFlavor flavor, string? repoName, out bool flavorMatched, out bool looksCompanion)
     {
         flavorMatched = false;
-        var tokens = Tokens(Path.GetFileNameWithoutExtension(fileName)).ToHashSet();
+        looksCompanion = false;
+        var all = Tokens(Path.GetFileNameWithoutExtension(fileName)).ToList();
+        var tokens = all.ToHashSet();
         var wanted = flavor.ReleaseFlavors.SelectMany(f => TokensForFlavor.TryGetValue(f, out var t) ? t : new[] { f }).ToHashSet();
         var score = 0;
         if (tokens.Overlaps(wanted)) { score += 100; flavorMatched = true; }
         else if (tokens.Overlaps(FlavorTokens)) score -= 50;
         if (tokens.Contains("nolib")) score -= 10;
+
+        if (!string.IsNullOrEmpty(repoName))
+        {
+            var meaningful = all.Where(t => !IsVersionToken(t) && !FlavorTokens.Contains(t)).ToHashSet();
+            var repoTokens = Tokens(repoName).Where(t => !IsVersionToken(t)).ToHashSet();
+            if (meaningful.Count > 0 && repoTokens.Count > 0)
+            {
+                if (meaningful.SetEquals(repoTokens)) score += 40;
+                else if (repoTokens.IsSubsetOf(meaningful)) { score += 5; looksCompanion = true; }
+            }
+        }
         return score;
     }
 
@@ -99,9 +124,10 @@ public sealed class GitHubProvider : IAddonProvider
             .Where(r => !r.Bool("draft") && (allowPrerelease || !r.Bool("prerelease")))
             .ToList();
 
+        var repoName = parts.Last();
         foreach (var rel in releases)
         {
-            var picked = await PickFromReleaseAsync(rel, ctx, ct).ConfigureAwait(false);
+            var picked = await PickFromReleaseAsync(rel, repoName, ctx, ct).ConfigureAwait(false);
             if (picked != null)
             {
                 result.Latest = picked;
@@ -130,12 +156,13 @@ public sealed class GitHubProvider : IAddonProvider
         return result;
     }
 
-    private static async Task<ReleaseInfo?> PickFromReleaseAsync(JsonElement rel, ProviderContext ctx, CancellationToken ct)
+    private static async Task<ReleaseInfo?> PickFromReleaseAsync(JsonElement rel, string repoName, ProviderContext ctx, CancellationToken ct)
     {
         var assets = rel.Arr("assets").ToList();
         var tag = rel.Str("tag_name") ?? rel.Str("name") ?? "";
         JsonElement? chosen = null;
         var flavorMatched = false;
+        var companion = false;
 
         var meta = assets.FirstOrDefault(a => string.Equals(a.Str("name"), "release.json", StringComparison.OrdinalIgnoreCase));
         if (meta.ValueKind == JsonValueKind.Object && meta.Str("browser_download_url") is { } metaUrl)
@@ -160,8 +187,14 @@ public sealed class GitHubProvider : IAddonProvider
 
         if (chosen == null)
         {
-            var pick = AssetPicker.Pick(assets, a => a.Str("name") ?? "", ctx.Flavor, out flavorMatched);
-            if (pick.ValueKind == JsonValueKind.Object) chosen = pick;
+            var best = int.MinValue;
+            foreach (var a in assets)
+            {
+                var n = a.Str("name") ?? "";
+                if (!n.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)) continue;
+                var s = AssetPicker.Score(n, ctx.Flavor, repoName, out var m, out var comp);
+                if (s > best) { best = s; chosen = a; flavorMatched = m; companion = comp; }
+            }
         }
 
         var release = new ReleaseInfo
@@ -174,6 +207,9 @@ public sealed class GitHubProvider : IAddonProvider
 
         if (chosen is { } a2)
         {
+            // This release only ships a companion artifact (e.g. "Polestar_Recorder"), not the
+            // addon itself. Skip it so an older release with the real addon zip is used instead.
+            if (companion && !flavorMatched) return null;
             release.ReleaseId = a2.Str("id") ?? tag;
             release.DownloadUrl = a2.Str("browser_download_url") ?? "";
             release.FileName = a2.Str("name");
@@ -182,6 +218,10 @@ public sealed class GitHubProvider : IAddonProvider
             return release;
         }
 
+        // The release has binary assets but no addon zip (e.g. desktop app installers). It is not
+        // a WoW addon release, so skip it. Only fall back to the source archive when a release
+        // ships nothing at all, which is how some addons publish source-only tags.
+        if (assets.Count > 0) return null;
         var zipball = rel.Str("zipball_url");
         if (string.IsNullOrEmpty(zipball)) return null;
         release.ReleaseId = "tag:" + tag;
